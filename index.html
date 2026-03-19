@@ -3,51 +3,240 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Knockout React - No Terminal</title>
+    <title>Knockout - React Edition</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; padding-top: 50px; background-color: #f0f2f5; }
-        .button { padding: 15px; font-weight: bold; cursor: pointer; border-radius: 8px; border: none; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .button:active { transform: translateY(2px); }
+        :root { --p1-color: #3b82f6; --p2-color: #ef4444; --ai-color: #a855f7; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #111; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+        #root { width: 100%; display: flex; justify-content: center; }
+        button { cursor: pointer; border: none; transition: 0.1s; border-radius: 8px; font-weight: bold; }
+        button:hover { filter: brightness(1.1); }
+        button:active { transform: translateY(2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .full-screen { text-align: center; }
+        .main-menu { display: flex; flex-direction: column; gap: 15px; max-width: 300px; margin: auto; }
+        .menu-btn { padding: 18px; font-size: 1.1rem; text-transform: uppercase; }
+        .btn-green { background: #22c55e; color: white; }
+        .btn-blue { background: #3b82f6; color: white; }
+        .btn-purple { background: #a855f7; color: white; }
+        .btn-yellow { background: #f59e0b; color: #111; }
+        .btn-red { background: #ef4444; color: white; }
+        .btn-quit { background: #3f3f46; color: white; padding: 12px; margin-top: 20px; }
+        .about-text { max-width: 500px; margin: auto; color: #ccc; line-height: 1.6; padding: 20px; text-align: left; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect, useRef, useCallback } = React;
 
-        function App() {
+        // --- KONFIGURASI ---
+        const PUSH_AMOUNT = 8;        // Seberapa jauh blok bergerak sekali tekan
+        const AI_SPEED_MS = 150;     // Kecepatan AI (lebih rendah = lebih cepat)
+        const ARENA_WIDTH_PERCENT = 80;
+        const P1_COLOR = "var(--p1-color)";
+        const P2_COLOR = "var(--p2-color)";
+        const AI_COLOR = "var(--ai-color)";
+
+        // --- LAYAR-LAYAR (SCREENS) ---
+
+        function MainMenu({ onViewChange, onSetGameMode }) {
+            return (
+                <div className="full-screen main-menu">
+                    <h1 style={{ fontSize: '3rem', margin: '0 0 40px' }}>🥊 KNOCKOUT 2D 🥊</h1>
+                    <button className="menu-btn btn-green" onClick={() => { onSetGameMode('ai'); onViewChange('game'); }}>vs AI (1 Pemain)</button>
+                    <button className="menu-btn btn-blue" onClick={() => { onSetGameMode('player'); onViewChange('game'); }}>vs Teman (2 Pemain)</button>
+                    <button className="menu-btn btn-yellow" onClick={() => onViewChange('about')}>About / Cara Main</button>
+                    <button className="menu-btn btn-quit" onClick={() => onViewChange('quit_notice')}>Quit</button>
+                    <p style={{ color: '#555', marginTop: '30px' }}>Dibuat dengan React & Cinta</p>
+                </div>
+            );
+        }
+
+        function AboutScreen({ onViewChange }) {
+            return (
+                <div className="full-screen">
+                    <h2>Tentang Knockout 2D</h2>
+                    <div className="about-text">
+                        <p>Game ini terinspirasi dari game Roblox 'Knockout', di mana tujuannya adalah mendorong lawan keluar dari arena.</p>
+                        <p><strong>Cara Main (vs Teman):</strong><br/>
+                           - Pemain 1 (Biru): Tekan tombol '<strong>A</strong>' dengan cepat.<br/>
+                           - Pemain 2 (Merah): Tekan tombol '<strong>L</strong>' dengan cepat.<br/>
+                           Pemenangnya adalah yang pertama kali mendorong lingkaran lawan sepenuhnya keluar dari garis arena.
+                        </p>
+                        <p><strong>Cara Main (vs AI):</strong><br/>
+                           - Kamu (Biru): Tekan tombol '<strong>A</strong>' atau klik tombol.<br/>
+                           - AI (Ungu): Berusaha mendorongmu balik secara otomatis!
+                        </p>
+                    </div>
+                    <button className="menu-btn btn-yellow" onClick={() => onViewChange('menu')}>Kembali</button>
+                </div>
+            );
+        }
+
+        function QuitNotice({ onViewChange }) {
+            return (
+                <div className="full-screen">
+                    <h1 style={{ fontSize: '4rem' }}>🛑</h1>
+                    <h2>Terima Kasih Telah Bermain!</h2>
+                    <p style={{ color: '#ccc' }}>Tombol 'Quit' di browser web tidak bisa menutup tab secara langsung karena alasan keamanan.</p>
+                    <p>Silakan tutup tab ini secara manual.</p>
+                    <button className="menu-btn btn-yellow" onClick={() => onViewChange('menu')}>Kembali ke Menu</button>
+                </div>
+            );
+        }
+
+        function GameLoop({ gameMode, scores, setScores, onViewChange }) {
+            // Posisi dihitung dalam persentase (50 adalah tengah)
             const [position, setPosition] = useState(50);
             const [gameOver, setGameOver] = useState(false);
             const [winner, setWinner] = useState('');
+            const aiIntervalRef = useRef(null);
 
-            const pushBlock = (amount) => {
+            const pushBlock = useCallback((amount, source) => {
                 if (gameOver) return;
-                const newPos = position + amount;
-                setPosition(newPos);
-                if (newPos <= 0) { setGameOver(true); setWinner('Pemain 2 (Kanan)'); }
-                else if (newPos >= 100) { setGameOver(true); setWinner('Pemain 1 (Kiri)'); }
+                
+                setPosition(prev => {
+                    const newPos = prev + amount;
+                    // Cek batasan arena (0-100)
+                    if (newPos <= 0 || newPos >= 100) {
+                        setGameOver(true);
+                        const win = amount > 0 ? (gameMode === 'ai' ? 'Biru' : 'Biru') : (gameMode === 'ai' ? 'AI' : 'Merah');
+                        setWinner(win);
+                        setScores(prevScores => ({ ...prevScores, [win]: prevScores[win] + 1 }));
+                        return amount > 0 ? 100 : 0;
+                    }
+                    return newPos;
+                });
+            }, [gameOver, gameMode, setScores]);
+
+            // Setup Kontrol Keyboard
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (gameMode === 'player') {
+                        if (e.key.toLowerCase() === 'a') pushBlock(PUSH_AMOUNT / 2, 'p1'); // P1 Dorong ke kanan
+                        if (e.key.toLowerCase() === 'l') pushBlock(-PUSH_AMOUNT / 2, 'p2'); // P2 Dorong ke kiri
+                    } else if (gameMode === 'ai') {
+                        if (e.key.toLowerCase() === 'a') pushBlock(PUSH_AMOUNT / 2, 'p1'); // Kamu Dorong ke kanan
+                    }
+                };
+
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [pushBlock, gameMode]);
+
+            // Setup AI Logic (Mekanik Dasar: Menekan terus menerus)
+            useEffect(() => {
+                if (gameMode === 'ai' && !gameOver) {
+                    aiIntervalRef.current = setInterval(() => {
+                        pushBlock(-PUSH_AMOUNT, 'ai'); // AI Dorong ke kiri
+                    }, AI_SPEED_MS);
+                }
+                return () => { if (aiIntervalRef.current) clearInterval(aiIntervalRef.current); };
+            }, [gameMode, gameOver, pushBlock]);
+
+            const resetMatch = () => {
+                setPosition(50);
+                setGameOver(false);
+                setWinner('');
+            };
+
+            const p1Color = P1_COLOR;
+            const p2Color = gameMode === 'ai' ? AI_COLOR : P2_COLOR;
+            const p2Name = gameMode === 'ai' ? 'AI' : 'Merah';
+
+            return (
+                <div className="full-screen">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 30px' }}>
+                        <div style={{color: p1Color, fontWeight: 'bold'}}>P1 (Biru): <span style={{fontSize: '1.5rem'}}>{scores['Biru']}</span></div>
+                        <div style={{fontWeight: 'bold'}}>Arena Knockout</div>
+                        <div style={{color: p2Color, fontWeight: 'bold'}}>{p2Name}: <span style={{fontSize: '1.5rem'}}>{scores[p2Name]}</span></div>
+                    </div>
+
+                    <p style={{ color: '#aaa' }}>{gameMode === 'player' ? 'Gunakan Tombol A & L atau Klik' : 'Gunakan Tombol A atau Klik'}</p>
+
+                    {/* Arena */}
+                    <div style={{ 
+                        width: `${ARENA_WIDTH_PERCENT}%`, 
+                        height: '60px', 
+                        backgroundColor: '#222', 
+                        margin: '40px auto', 
+                        position: 'relative',
+                        borderRadius: '30px',
+                        border: '4px solid #444',
+                        overflow: 'hidden',
+                        boxShadow: 'inset 0 4px 10px rgba(0,0,0,0.5)'
+                    }}>
+                        {/* Garis Tengah */}
+                        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '2px', backgroundColor: '#333', transform: 'translateX(-50%)' }} />
+
+                        {/* Lingkaran P1 (Yang didorong) */}
+                        <div style={{
+                            width: '50px', height: '50px',
+                            backgroundColor: p1Color,
+                            position: 'absolute', top: '5px',
+                            left: `calc(${position}% - 25px)`,
+                            borderRadius: '50%',
+                            transition: 'left 0.1s ease-out',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.4)',
+                            border: `3px solid ${gameOver && winner === 'Biru' ? '#ffd700' : 'white'}`,
+                            boxSizing: 'border-box'
+                        }} />
+                    </div>
+
+                    {/* Kontrol di Layar (Opsional untuk Mobile) */}
+                    {!gameOver && (
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '50px', marginTop: '20px' }}>
+                            <button className="menu-btn btn-blue" onClick={() => pushBlock(PUSH_AMOUNT, 'p1')}>Dorong P1 (Biru)</button>
+                            {gameMode === 'player' && (
+                                <button className="menu-btn btn-red" onClick={() => pushBlock(-PUSH_AMOUNT, 'p2')}>Dorong P2 (Merah)</button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Layar Knockout (Pop-up) */}
+                    {gameOver && (
+                        <div style={{
+                            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                            backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', zIndex: 10
+                        }}>
+                            <h1 style={{ fontSize: '5rem', color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.5)', margin: '0' }}>KNOCKOUT!</h1>
+                            <h2 style={{ fontSize: '2rem', color: winner === 'Biru' ? p1Color : p2Color, margin: '20px 0 40px' }}>🎉 Pemain {winner} Menang! 🎉</h2>
+                            <div style={{ display: 'flex', gap: '20px' }}>
+                                <button className="menu-btn btn-green" onClick={resetMatch}>Main Lagi</button>
+                                <button className="menu-btn btn-yellow" onClick={() => onViewChange('menu')}>Menu Utama</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+
+        // --- APLIKASI UTAMA (APP) ---
+
+        function App() {
+            const [currentView, setCurrentView] = useState('menu'); // menu, game, about, quit_notice
+            const [gameMode, setGameMode] = useState('ai'); // ai, player
+            const [scores, setScores] = useState({ Biru: 0, Merah: 0, AI: 0 });
+
+            // Menampilkan layar yang sesuai berdasarkan state
+            const renderView = () => {
+                switch (currentView) {
+                    case 'menu': return <MainMenu onViewChange={setCurrentView} onSetGameMode={setGameMode} />;
+                    case 'about': return <AboutScreen onViewChange={setCurrentView} />;
+                    case 'quit_notice': return <QuitNotice onViewChange={setCurrentView} />;
+                    case 'game': return <GameLoop gameMode={gameMode} scores={scores} setScores={setScores} onViewChange={setCurrentView} />;
+                    default: return <MainMenu onViewChange={setCurrentView} onSetGameMode={setGameMode} />;
+                }
             };
 
             return (
-                <div style={{ textAlign: 'center' }}>
-                    <h2>🥊 Knockout React 🥊</h2>
-                    <div style={{ width: '300px', height: '40px', backgroundColor: '#ddd', margin: '20px auto', position: 'relative', borderRadius: '20px', border: '3px solid #333', overflow: 'hidden' }}>
-                        <div style={{ position: 'absolute', left: `${position}%`, top: '5px', width: '30px', height: '30px', backgroundColor: gameOver ? 'red' : '#2ed573', borderRadius: '50%', transform: 'translateX(-15px)', transition: 'left 0.1s' }} />
-                    </div>
-                    <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
-                        <button className="button" onClick={() => pushBlock(5)} disabled={gameOver}>Dorong Kanan</button>
-                        <button className="button" onClick={() => pushBlock(-5)} disabled={gameOver}>Dorong Kiri</button>
-                    </div>
-                    {gameOver && (
-                        <div>
-                            <h3 style={{color: 'red'}}>KNOCKOUT! {winner} Menang!</h3>
-                            <button className="button" onClick={() => { setPosition(50); setGameOver(false); }}>Main Lagi</button>
-                        </div>
-                    )}
+                <div style={{ width: '100%', maxWidth: '1200px', padding: '20px' }}>
+                    {renderView()}
                 </div>
             );
         }
