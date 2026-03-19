@@ -6,7 +6,7 @@ Selamat datang di **Knockout 2D**, sebuah game arkade sederhana yang terinspiras
 
 Klik tombol di bawah ini untuk langsung menuju arena pertandingan:
 
-[![Play Game](https://img.shields.io/badge/MAIN_SEKARANG-KLIK_DI_SINI-green?style=for-the-badge&logo=rocket&logoColor=white)](https://hastagaming.github.io/knockout-clone/)
+[![Play Game](https://img.shields.io/badge/MAIN_SEKARANG-KLIK_DI_SINI-green?style=for-the-badge&logo=rocket&logoColor=white)](https://hastagaming.github.io/Knockout-clone/)
 
 > **Catatan:** Ganti `YOUR_USERNAME` dengan username GitHub kamu dan `YOUR_REPO_NAME` dengan nama repositori gamemu agar tombol di atas berfungsi!
 
