@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Knockout React - No Terminal</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; padding-top: 50px; background-color: #f0f2f5; }
+        .button { padding: 15px; font-weight: bold; cursor: pointer; border-radius: 8px; border: none; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .button:active { transform: translateY(2px); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function App() {
+            const [position, setPosition] = useState(50);
+            const [gameOver, setGameOver] = useState(false);
+            const [winner, setWinner] = useState('');
+
+            const pushBlock = (amount) => {
+                if (gameOver) return;
+                const newPos = position + amount;
+                setPosition(newPos);
+                if (newPos <= 0) { setGameOver(true); setWinner('Pemain 2 (Kanan)'); }
+                else if (newPos >= 100) { setGameOver(true); setWinner('Pemain 1 (Kiri)'); }
+            };
+
+            return (
+                <div style={{ textAlign: 'center' }}>
+                    <h2>🥊 Knockout React 🥊</h2>
+                    <div style={{ width: '300px', height: '40px', backgroundColor: '#ddd', margin: '20px auto', position: 'relative', borderRadius: '20px', border: '3px solid #333', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', left: `${position}%`, top: '5px', width: '30px', height: '30px', backgroundColor: gameOver ? 'red' : '#2ed573', borderRadius: '50%', transform: 'translateX(-15px)', transition: 'left 0.1s' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+                        <button className="button" onClick={() => pushBlock(5)} disabled={gameOver}>Dorong Kanan</button>
+                        <button className="button" onClick={() => pushBlock(-5)} disabled={gameOver}>Dorong Kiri</button>
+                    </div>
+                    {gameOver && (
+                        <div>
+                            <h3 style={{color: 'red'}}>KNOCKOUT! {winner} Menang!</h3>
+                            <button className="button" onClick={() => { setPosition(50); setGameOver(false); }}>Main Lagi</button>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
